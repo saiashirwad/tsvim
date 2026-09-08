@@ -1,5 +1,7 @@
 # pureluanvim
 
+100% certifiably slop
+
 Write Neovim configurations and plugins as compositions of values, tasks, and
 owned views. TypeScript compiles to Lua; Neovim runs the result directly.
 
