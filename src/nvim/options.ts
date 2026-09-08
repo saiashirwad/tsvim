@@ -1,13 +1,17 @@
-// Typed Vim options.
+// Options as a declaration.
 //
-//   opt.number = true
-//   opt.clipboard = ["unnamedplus"]           // list options accept arrays
-//   opt.shortmess.append("I")                 // list/flag operations
-//   optLocal.shiftwidth = 2                   // buffer/window-local
-//   opts({ number: true, relativenumber: true, tabstop: 4 })
+//   options({ number: true, clipboard: ["unnamedplus"], shortmess: add("I") })
+//
+// Globally that is `:set`; inside a buffer context it is `:setlocal` for that
+// buffer (and the window showing it). Unmounting restores the previous values,
+// so removing a line from the config and reloading really removes it.
 
-/** Comma-separated list options can be assigned as arrays. */
-export type ListOption = string | readonly string[]
+import { behavior, type Node } from "./spec"
+import { lease } from "./lease"
+import { events } from "./events"
+
+/** Comma-separated list options accept arrays. */
+export type List = string | readonly string[]
 
 export interface Options {
   // ---- ui
@@ -17,8 +21,8 @@ export interface Options {
   signcolumn: "auto" | "yes" | "no" | "number" | `auto:${number}` | `yes:${number}` | (string & {})
   cursorline: boolean
   cursorcolumn: boolean
-  cursorlineopt: ListOption
-  colorcolumn: ListOption
+  cursorlineopt: List
+  colorcolumn: List
   termguicolors: boolean
   background: "dark" | "light"
   laststatus: 0 | 1 | 2 | 3
@@ -32,14 +36,16 @@ export interface Options {
   statusline: string
   tabline: string
   winbar: string
+  statuscolumn: string
   winborder: "none" | "single" | "double" | "rounded" | "solid" | "shadow" | "bold"
   list: boolean
-  listchars: ListOption
-  fillchars: ListOption
+  listchars: List
+  fillchars: List
   wrap: boolean
   linebreak: boolean
   breakindent: boolean
   showbreak: string
+  smoothscroll: boolean
   scrolloff: number
   sidescrolloff: number
   sidescroll: number
@@ -54,7 +60,10 @@ export interface Options {
   equalalways: boolean
   winminheight: number
   winminwidth: number
-  guicursor: ListOption
+  winfixheight: boolean
+  winfixwidth: boolean
+  winfixbuf: boolean
+  guicursor: List
   guifont: string
   mouse: string
   mousemoveevent: boolean
@@ -63,7 +72,7 @@ export interface Options {
   redrawtime: number
   visualbell: boolean
   errorbells: boolean
-  belloff: ListOption
+  belloff: List
   // ---- editing
   tabstop: number
   shiftwidth: number
@@ -79,29 +88,29 @@ export interface Options {
   formatoptions: string
   formatexpr: string
   formatprg: string
-  backspace: ListOption
+  backspace: List
   whichwrap: string
-  virtualedit: ListOption
+  virtualedit: List
   startofline: boolean
   joinspaces: boolean
-  nrformats: ListOption
-  matchpairs: ListOption
+  nrformats: List
+  matchpairs: List
   showmatch: boolean
   matchtime: number
   undofile: boolean
   undolevels: number
-  undodir: ListOption
+  undodir: List
   swapfile: boolean
   backup: boolean
   writebackup: boolean
-  backupdir: ListOption
+  backupdir: List
   autoread: boolean
   autowrite: boolean
   autowriteall: boolean
   hidden: boolean
   confirm: boolean
   fileformat: "unix" | "dos" | "mac"
-  fileformats: ListOption
+  fileformats: List
   fileencoding: string
   encoding: string
   bomb: boolean
@@ -113,25 +122,22 @@ export interface Options {
   buftype: "" | "acwrite" | "help" | "nofile" | "nowrite" | "quickfix" | "terminal" | "prompt"
   bufhidden: "" | "hide" | "unload" | "delete" | "wipe"
   buflisted: boolean
-  winhighlight: ListOption
-  winfixheight: boolean
-  winfixwidth: boolean
+  winhighlight: List
   scrollbind: boolean
   cursorbind: boolean
   previewwindow: boolean
-  winfixbuf: boolean
   modifiable: boolean
   readonly: boolean
   filetype: string
   syntax: string
   commentstring: string
-  comments: ListOption
-  iskeyword: ListOption
-  isfname: ListOption
+  comments: List
+  iskeyword: List
+  isfname: List
   spell: boolean
-  spelllang: ListOption
-  spelloptions: ListOption
-  clipboard: ListOption
+  spelllang: List
+  spelloptions: List
+  clipboard: List
   // ---- search
   ignorecase: boolean
   smartcase: boolean
@@ -141,14 +147,14 @@ export interface Options {
   magic: boolean
   inccommand: "" | "nosplit" | "split"
   grepprg: string
-  grepformat: ListOption
+  grepformat: List
   // ---- completion
-  completeopt: ListOption
-  complete: ListOption
+  completeopt: List
+  complete: List
   wildmenu: boolean
-  wildmode: ListOption
-  wildoptions: ListOption
-  wildignore: ListOption
+  wildmode: List
+  wildoptions: List
+  wildignore: List
   wildignorecase: boolean
   omnifunc: string
   completefunc: string
@@ -171,118 +177,132 @@ export interface Options {
   updatetime: number
   history: number
   shada: string
-  sessionoptions: ListOption
-  viewoptions: ListOption
-  diffopt: ListOption
-  path: ListOption
-  runtimepath: ListOption
-  packpath: ListOption
+  sessionoptions: List
+  viewoptions: List
+  diffopt: List
+  path: List
+  runtimepath: List
+  packpath: List
   shell: string
   shellcmdflag: string
   keywordprg: string
   makeprg: string
-  errorformat: ListOption
-  jumpoptions: ListOption
+  errorformat: List
+  jumpoptions: List
   selection: "inclusive" | "exclusive" | "old"
   exrc: boolean
   secure: boolean
   scrollback: number
-  // ---- statuscolumn / smoothscroll (0.9+)
-  statuscolumn: string
-  smoothscroll: boolean
-  // ---- listchars-adjacent
-  display: ListOption
+  display: List
   cpoptions: string
   more: boolean
   report: number
   helpheight: number
   previewheight: number
   tagfunc: string
-  tags: ListOption
+  tags: List
 }
 
-/** Names of options that take a comma-separated list. */
-export type ListOptionName = { [K in keyof Options]: Options[K] extends ListOption ? K : never }[keyof Options]
+/** An edit to a list/flag option instead of a replacement. */
+export interface ListOp {
+  readonly op: "append" | "prepend" | "remove"
+  readonly value: List
+}
 
-/** Option values as Vim wants them: arrays become comma-separated strings. */
+/** `shortmess: add("I")` — `:set+=` */
+export const add = (value: List): ListOp => ({ op: "append", value })
+/** `:set^=` */
+export const prepend = (value: List): ListOp => ({ op: "prepend", value })
+/** `:set-=` */
+export const drop = (value: List): ListOp => ({ op: "remove", value })
+
+export type OptionValues = { readonly [K in keyof Options]?: Options[K] | ListOp }
+
+const isOp = (v: unknown): v is ListOp =>
+  typeof v === "object" && v !== null && !Array.isArray(v) && "op" in (v as object)
+
 const encode = (v: unknown): string | number | boolean =>
   Array.isArray(v) ? (v as string[]).join(",") : (v as string | number | boolean)
 
-/** Operations on list/flag options (`:h :set+=`, `^=`, `-=`). */
-/** @noSelf */
-export interface ListOps {
-  append(value: ListOption): void
-  prepend(value: ListOption): void
-  remove(value: ListOption): void
-  get(): string[]
-}
+const items = (v: List): string[] =>
+  Array.isArray(v) ? [...(v as string[])] : (v as string).split(",")
 
-const listOps = (source: LuaDict<vim.OptionObject>, name: string): ListOps => ({
-  append: (v) => source[name]!.append(Array.isArray(v) ? [...v] : (v as string)),
-  prepend: (v) => source[name]!.prepend(Array.isArray(v) ? [...v] : (v as string)),
-  remove: (v) => source[name]!.remove(Array.isArray(v) ? [...v] : (v as string)),
-  get: () => {
-    const raw = source[name]!.get()
-    if (Array.isArray(raw)) return raw as string[]
-    if (typeof raw === "string") return raw === "" ? [] : raw.split(",")
-    return [String(raw)]
-  },
-})
-
-const makeOptions = (scope: "global" | "local"): Options => {
-  const source = scope === "global" ? vim.opt : vim.opt_local
-  const read = (name: string): unknown => {
-    const raw = source[name]!.get()
-    // reading a list option gives an array augmented with list operations
-    if (typeof raw === "object" && raw !== null) {
-      const arr = Array.isArray(raw) ? [...(raw as string[])] : Object.keys(raw as object)
-      return Object.assign(arr, listOps(source, name))
+/** Apply a `+=`/`^=`/`-=` edit to the current string value, honouring flag vs comma-list semantics. */
+const applyOp = (name: string, current: string, op: ListOp): string => {
+  const info = vim.api.nvim_get_option_info2(name, {})
+  if (info.flaglist) {
+    const flags = typeof op.value === "string" ? op.value : (op.value as readonly string[]).join("")
+    let out = current
+    for (const f of flags.split("")) {
+      if (op.op === "remove") out = out.split(f).join("")
+      else if (!out.includes(f)) out = op.op === "prepend" ? f + out : out + f
     }
-    // strings that contain commas are lists too; expose the ops on a String wrapper is unidiomatic,
-    // so only arrays get the ops. Flag strings (like shortmess) are handled via `optList`.
-    return raw
+    return out
   }
-  const write = (name: string, value: unknown): void => {
-    if (scope === "global") vim.o[name] = encode(value)
-    else vim.api.nvim_set_option_value(name, encode(value), { scope: "local" })
-  }
-  return setmetatable({} as unknown as Options, {
-    __index: (_: unknown, name: string) => read(name),
-    __newindex: (name: string, value: unknown) => write(name, value),
-  })
+  const have = current === "" ? [] : current.split(",")
+  const incoming = items(op.value)
+  if (op.op === "remove") return have.filter((x) => !incoming.includes(x)).join(",")
+  const fresh = incoming.filter((x) => !have.includes(x))
+  return (op.op === "prepend" ? [...fresh, ...have] : [...have, ...fresh]).join(",")
 }
 
-/** Global options (`vim.o`): `opt.number = true` */
-export const opt: Options = makeOptions("global")
-/** Buffer/window-local options (`vim.opt_local`): `optLocal.shiftwidth = 2` */
-export const optLocal: Options = makeOptions("local")
-
-/** List / flag operations on any list-ish option, for both arrays and flag strings. */
-export const optList = (name: ListOptionName | "shortmess" | "formatoptions" | "whichwrap" | "cpoptions" | "guicursor"): ListOps =>
-  listOps(vim.opt, name)
-
-/** Set many options at once. */
-export const opts = (values: Partial<Options>): void => {
-  for (const name in values) (opt as unknown as LuaDict)[name] = (values as LuaDict)[name]
+type Location = { buf?: number; win?: number; scope?: "global" | "local" }
+const claim = (name: string, value: unknown, location: Location): (() => void) => {
+  const old = vim.api.nvim_get_option_value(name, location)
+  const valid = () =>
+    (location.buf === undefined || vim.api.nvim_buf_is_valid(location.buf)) &&
+    (location.win === undefined || vim.api.nvim_win_is_valid(location.win))
+  const next = isOp(value)
+    ? applyOp(name, typeof old === "string" ? old : "", value)
+    : encode(value)
+  return lease(
+    `option:${name}:${location.buf ?? ""}:${location.win ?? ""}:${location.scope ?? ""}`,
+    () => {
+      if (valid()) vim.api.nvim_set_option_value(name, old, location)
+    },
+    () => {
+      if (valid()) vim.api.nvim_set_option_value(name, next, location)
+    },
+  )
 }
-
-/** Buffer-local option access for a specific buffer. */
-export const bufOpt = (buf: number): Options =>
-  setmetatable({} as unknown as Options, {
-    __index: (_: unknown, name: string) => vim.api.nvim_get_option_value(name, { buf }),
-    __newindex: (name: string, value: unknown) => vim.api.nvim_set_option_value(name, encode(value), { buf }),
-  })
-
-/** Window-local option access for a specific window. */
-export const winOpt = (win: number): Options =>
-  setmetatable({} as unknown as Options, {
-    __index: (_: unknown, name: string) => vim.api.nvim_get_option_value(name, { win }),
-    __newindex: (name: string, value: unknown) => vim.api.nvim_set_option_value(name, encode(value), { win }),
-  })
-
-/** Global variables (`vim.g`) with a typed shape you declare. */
-export const globals = <T extends object>(): T =>
-  setmetatable({} as T, {
-    __index: (_: unknown, name: string) => vim.g[name],
-    __newindex: (name: string, value: unknown) => { vim.g[name] = value },
+/** Typed native options remain available alongside opinionated editing policies. */
+export const options = (values: OptionValues): Node =>
+  behavior((scope) => {
+    for (const name in values) {
+      const value = (values as LuaDict)[name]
+      const kind = vim.api.nvim_get_option_info2(name, {}).scope
+      if (scope.buffer === undefined && scope.window === undefined) {
+        scope.own(claim(name, value, { scope: "global" }))
+        if (kind === "buf") scope.own(claim(name, value, { buf: vim.api.nvim_get_current_buf() }))
+        if (kind === "win")
+          scope.own(claim(name, value, { win: vim.api.nvim_get_current_win(), scope: "local" }))
+      } else if (kind === "global") {
+        throw new Error(`Option ${name} is global; declare it outside a buffer/window scope`)
+      } else if (kind === "buf") {
+        scope.own(
+          claim(name, value, { buf: scope.buffer ?? vim.api.nvim_win_get_buf(scope.window!) }),
+        )
+      } else if (scope.window !== undefined) {
+        scope.own(claim(name, value, { win: scope.window, scope: "local" }))
+      } else {
+        const windows = new Map<number, () => void>()
+        const reconcile = () => {
+          for (const [win, close] of windows) {
+            if (!vim.api.nvim_win_is_valid(win) || vim.api.nvim_win_get_buf(win) !== scope.buffer) {
+              close()
+              windows.delete(win)
+            }
+          }
+          for (const win of vim.api.nvim_list_wins()) {
+            if (vim.api.nvim_win_get_buf(win) === scope.buffer && !windows.has(win))
+              windows.set(win, claim(name, value, { win, scope: "local" }))
+          }
+        }
+        scope.own(() => {
+          for (const close of windows.values()) close()
+        })
+        scope.own(events(["BufWinEnter", "WinEnter", "WinClosed"]).subscribe(reconcile))
+        reconcile()
+      }
+    }
   })

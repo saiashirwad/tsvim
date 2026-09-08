@@ -1,33 +1,45 @@
-// pureluanvim — a typed, composable Neovim configuration API for TypeScriptToLua.
-//
-// Everything is re-exported here so a config only needs `import { … } from "./nvim"`.
+/** The public surface: values, tasks, behaviors, and owned views. */
+export * as Task from "./task"
+export type { Task as TaskValue, Exit } from "./task"
+export * as State from "./state"
+export type { Readable, Cell } from "./state"
+export * as Stream from "./stream"
+export type { Stream as EventStream } from "./stream"
+export * as Text from "./text"
+export type { Pos, Range, Edit } from "./text"
+export { pipe, flow, map, filter, compact, join } from "./fn"
+export { component, when, local, start, listen, native } from "./spec"
+export type { Behavior } from "./spec"
+export type { Scope } from "./scope"
+export { run, reload, stop } from "./run"
+export { resource } from "./resource"
+export type { Resource, ResourceState } from "./resource"
+export { serial } from "./task"
+export { action } from "./action"
+export type { Action } from "./action"
+export { keys } from "./keys"
+export { command } from "./command"
+export { events, on, filetypes, forBuffers, userEvents, emit } from "./events"
+export type { Ev, Event } from "./events"
+export { options, add, prepend, drop } from "./options"
+export type { Options, OptionValues } from "./options"
+export { highlights, palette, mix, lighten, darken } from "./highlight"
+export type { Hex, Style } from "./highlight"
+export { editing, search, leaders, syntax } from "./policies"
+export { packages, plugin, updatePackages } from "./plugins"
+export { language } from "./lsp"
+export { buffer, decorations } from "./buffer"
+export type { Snapshot, Decoration } from "./buffer"
+export { editor, files, diagnostics } from "./editor"
+export { exec, process, prompt, choose } from "./shell"
+export { text, line, lines, view, list } from "./view"
+export type { View, Chunk, Line, Document } from "./view"
+export { document } from "./document"
+export { floating, split } from "./window"
+export type { Panel } from "./window"
+export { statusbar, statusCode } from "./statusbar"
 
-export { keymap, cmd, luaCmd, termcodes, feed } from "./keys"
-export type { Keys, Chord, Mode, Action, Callback, MapOptions, MapOpts, MapTable, KeyTree, Keymap, ModeMapper, KeymapApi } from "./keys"
+export { picker, fuzzyMatch, rank } from "./picker"
+export type { Picker, PickerOptions } from "./picker"
 
-export { opt, optLocal, optList, opts, bufOpt, winOpt, globals } from "./options"
-export type { Options, ListOption, ListOptionName, ListOps } from "./options"
-
-export { on, once, augroup, emit, onUser } from "./events"
-export type { Event, EventData, AutocmdArgs, Handler, AutocmdOptions, Disposable, Augroup, On, Pattern } from "./events"
-
-export { command, ex, exOutput, normal } from "./command"
-export type { Nargs, CommandArgs, CommandOptions, CommandHandler, Command, CompleteKind } from "./command"
-
-export { hl, palette, mix } from "./highlight"
-export type { Color, HexColor, NamedColor, HighlightStyle, HighlightTable } from "./highlight"
-
-export { Buffer } from "./buffer"
-export type { ScratchOptions } from "./buffer"
-
-export { Window, Float, float, split } from "./window"
-export type { Cursor, Border, FloatSpec, Size } from "./window"
-
-export { lsp } from "./lsp"
-export type { LspSetup, ServerConfig, ServerName, AttachContext } from "./lsp"
-
-export { plugins, req, tryReq } from "./pack"
-export type { Plugin, PluginSpec, Plugins } from "./pack"
-
-export { notify, log, schedule, defer, every, debounce, throttle, sleep, sh, shSync, select, input, safely, hasExecutable, gitRoot, entries } from "./util"
-export type { LogLevel, Timer, ShellResult, ShellOptions } from "./util"
+export { expression, operator } from "./input"

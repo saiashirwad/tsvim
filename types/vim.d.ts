@@ -12,6 +12,8 @@ declare namespace vim {
   /** @noSelf */
   namespace api {
     // buffers
+    function nvim_buf_get_changedtick(buffer: number): number
+    function nvim_get_current_line(): string
     function nvim_get_current_buf(): number
     function nvim_set_current_buf(buf: number): void
     function nvim_create_buf(listed: boolean, scratch: boolean): number
@@ -19,24 +21,69 @@ declare namespace vim {
     function nvim_buf_is_loaded(buf: number): boolean
     function nvim_buf_delete(buf: number, opts: { force?: boolean; unload?: boolean }): void
     function nvim_buf_get_lines(buf: number, start: number, end_: number, strict: boolean): string[]
-    function nvim_buf_set_lines(buf: number, start: number, end_: number, strict: boolean, lines: string[]): void
-    function nvim_buf_get_text(buf: number, sr: number, sc: number, er: number, ec: number, opts: {}): string[]
-    function nvim_buf_set_text(buf: number, sr: number, sc: number, er: number, ec: number, lines: string[]): void
+    function nvim_buf_set_lines(
+      buf: number,
+      start: number,
+      end_: number,
+      strict: boolean,
+      lines: string[],
+    ): void
+    function nvim_buf_get_text(
+      buf: number,
+      sr: number,
+      sc: number,
+      er: number,
+      ec: number,
+      opts: {},
+    ): string[]
+    function nvim_buf_set_text(
+      buf: number,
+      sr: number,
+      sc: number,
+      er: number,
+      ec: number,
+      lines: string[],
+    ): void
     function nvim_buf_line_count(buf: number): number
     function nvim_buf_get_name(buf: number): string
     function nvim_buf_set_name(buf: number, name: string): void
     function nvim_buf_get_var(buf: number, name: string): unknown
     function nvim_buf_set_var(buf: number, name: string, value: unknown): void
-    function nvim_buf_set_keymap(buf: number, mode: string, lhs: string, rhs: string, opts: LuaDict): void
+    function nvim_buf_set_keymap(
+      buf: number,
+      mode: string,
+      lhs: string,
+      rhs: string,
+      opts: LuaDict,
+    ): void
     function nvim_buf_del_keymap(buf: number, mode: string, lhs: string): void
     function nvim_buf_attach(buf: number, send_buffer: boolean, opts: LuaDict): boolean
     function nvim_buf_call<T>(buf: number, fn: () => T): T
-    function nvim_buf_set_extmark(buf: number, ns: number, line: number, col: number, opts: LuaDict): number
+    function nvim_buf_set_extmark(
+      buf: number,
+      ns: number,
+      line: number,
+      col: number,
+      opts: LuaDict,
+    ): number
     function nvim_buf_clear_namespace(buf: number, ns: number, start: number, end_: number): void
-    function nvim_buf_add_highlight(buf: number, ns: number, group: string, line: number, cs: number, ce: number): number
+    function nvim_buf_add_highlight(
+      buf: number,
+      ns: number,
+      group: string,
+      line: number,
+      cs: number,
+      ce: number,
+    ): number
     function nvim_list_bufs(): number[]
     function nvim_buf_get_mark(buf: number, name: string): [number, number]
-    function nvim_buf_set_mark(buf: number, name: string, line: number, col: number, opts: {}): boolean
+    function nvim_buf_set_mark(
+      buf: number,
+      name: string,
+      line: number,
+      col: number,
+      opts: {},
+    ): boolean
 
     // windows
     function nvim_get_current_win(): number
@@ -46,7 +93,7 @@ declare namespace vim {
     function nvim_win_hide(win: number): void
     function nvim_win_get_buf(win: number): number
     function nvim_win_set_buf(win: number, buf: number): void
-    function nvim_win_get_cursor(win: number): LuaMultiReturn<[number, number]> & [number, number]
+    function nvim_win_get_cursor(win: number): [number, number]
     function nvim_win_set_cursor(win: number, pos: [number, number]): void
     function nvim_win_get_height(win: number): number
     function nvim_win_set_height(win: number, h: number): void
@@ -59,19 +106,52 @@ declare namespace vim {
     function nvim_list_wins(): number[]
     function nvim_tabpage_list_wins(tab: number): number[]
     function nvim_get_current_tabpage(): number
+    function nvim_tabpage_is_valid(tab: number): boolean
+    function nvim_set_current_tabpage(tab: number): void
 
     // options / vars
-    function nvim_get_option_value(name: string, opts: { buf?: number; win?: number; scope?: "global" | "local" }): unknown
-    function nvim_set_option_value(name: string, value: unknown, opts: { buf?: number; win?: number; scope?: "global" | "local" }): void
+    function nvim_get_option_value(
+      name: string,
+      opts: { buf?: number; win?: number; scope?: "global" | "local" },
+    ): unknown
+    function nvim_set_option_value(
+      name: string,
+      value: unknown,
+      opts: { buf?: number; win?: number; scope?: "global" | "local" },
+    ): void
+    function nvim_get_option_info2(
+      name: string,
+      opts: { buf?: number; win?: number; scope?: "global" | "local" },
+    ): {
+      flaglist: boolean
+      commalist: boolean
+      scope: "global" | "buf" | "win"
+      type: string
+      default: unknown
+    }
     function nvim_get_var(name: string): unknown
     function nvim_set_var(name: string, value: unknown): void
+
+    function nvim_get_keymap(mode: string): LuaDict[]
+    function nvim_buf_get_keymap(buffer: number, mode: string): LuaDict[]
 
     // keymaps / commands / autocmds
     function nvim_set_keymap(mode: string, lhs: string, rhs: string, opts: LuaDict): void
     function nvim_del_keymap(mode: string, lhs: string): void
-    function nvim_create_user_command(name: string, command: string | ((opts: LuaDict) => void), opts: LuaDict): void
+    function nvim_create_user_command(
+      name: string,
+      command: string | ((opts: LuaDict) => void),
+      opts: LuaDict,
+    ): void
     function nvim_del_user_command(name: string): void
-    function nvim_buf_create_user_command(buf: number, name: string, command: string | ((opts: LuaDict) => void), opts: LuaDict): void
+    function nvim_buf_del_user_command(buf: number, name: string): void
+    function nvim_buf_create_user_command(
+      buf: number,
+      name: string,
+      command: string | ((opts: LuaDict) => void),
+      opts: LuaDict,
+    ): void
+    function nvim_get_autocmds(options: LuaDict): LuaDict[]
     function nvim_create_augroup(name: string, opts: { clear?: boolean }): number
     function nvim_del_augroup_by_id(id: number): void
     function nvim_del_augroup_by_name(name: string): void
@@ -84,11 +164,20 @@ declare namespace vim {
     function nvim_set_hl(ns: number, name: string, val: LuaDict): void
     function nvim_get_hl(ns: number, opts: { name?: string; link?: boolean }): LuaDict
     function nvim_create_namespace(name: string): number
-    function nvim_echo(chunks: Array<[string] | [string, string]>, history: boolean, opts: LuaDict): void
+    function nvim_echo(
+      chunks: Array<[string] | [string, string]>,
+      history: boolean,
+      opts: LuaDict,
+    ): void
     function nvim_err_writeln(msg: string): void
     function nvim_feedkeys(keys: string, mode: string, escape_ks: boolean): void
     function nvim_input(keys: string): number
-    function nvim_replace_termcodes(str: string, from_part: boolean, do_lt: boolean, special: boolean): string
+    function nvim_replace_termcodes(
+      str: string,
+      from_part: boolean,
+      do_lt: boolean,
+      special: boolean,
+    ): string
     function nvim_get_mode(): { mode: string; blocking: boolean }
     function nvim_exec2(src: string, opts: { output?: boolean }): { output?: string }
     function nvim_command(cmd: string): void
@@ -104,10 +193,25 @@ declare namespace vim {
   interface Fn {
     expand(expr: string, nosuf?: boolean, list?: boolean): string
     fnamemodify(fname: string, mods: string): string
+    mapset(mode: string, abbr: boolean, mapping: LuaDict): void
+    tempname(): string
+    getqflist(): LuaDict[]
+    getqflist(options: LuaDict): LuaDict
+    getwininfo(window?: number): LuaDict[]
+    undotree(): LuaDict
+    getjumplist(): [LuaDict[], number]
+    histnr(history: string): number
+    histget(history: string, index: number): string
+    getregion(first: number[], last: number[], options: LuaDict): string[]
+    getloclist(window: number): LuaDict[]
+    setqflist(items: LuaDict[], action?: string, options?: LuaDict): void
+    setloclist(window: number, items: LuaDict[], action?: string, options?: LuaDict): void
     getcwd(): string
     line(expr: string): number
     col(expr: string): number
-    mode(): string
+    mode(full?: number): string
+    getcharstr(): string
+    pumvisible(): number
     has(feature: string): 0 | 1
     exists(expr: string): 0 | 1
     executable(name: string): 0 | 1
@@ -119,6 +223,8 @@ declare namespace vim {
     winsaveview(): LuaDict
     winrestview(view: LuaDict): void
     bufnr(expr?: string): number
+    bufadd(name: string): number
+    bufload(buf: number): void
     bufname(expr?: string | number): string
     getline(lnum: number | string, end_?: number | string): string
     setline(lnum: number | string, text: string | string[]): number
@@ -130,12 +236,13 @@ declare namespace vim {
     filereadable(path: string): 0 | 1
     isdirectory(path: string): 0 | 1
     mkdir(path: string, flags?: string): number
-    readfile(path: string): string[]
+    readfile(path: string, type?: string, maxLines?: number): string[]
     writefile(lines: string[], path: string, flags?: string): number
     delete(path: string, flags?: string): number
     systemlist(cmd: string | string[]): string[]
     system(cmd: string | string[]): string
     jobstart(cmd: string | string[], opts: LuaDict): number
+    jobstop(job: number): number
     termopen(cmd: string | string[], opts?: LuaDict): number
     strftime(format: string, time?: number): string
     localtime(): number
@@ -185,9 +292,11 @@ declare namespace vim {
   const cmd: CmdApi
   function notify(msg: string, level?: number, opts?: LuaDict): void
   function notify_once(msg: string, level?: number, opts?: LuaDict): void
+  function in_fast_event(): boolean
   function schedule(fn: () => void): void
   function schedule_wrap<F extends (...args: any[]) => any>(fn: F): F
   function defer_fn(fn: () => void, ms: number): unknown
+  function str_byteindex(text: string, encoding: string, index: number, strict?: boolean): number
   function inspect(v: unknown, opts?: LuaDict): string
   function print(...args: unknown[]): void
   function split(s: string, sep: string, opts?: { plain?: boolean; trimempty?: boolean }): string[]
@@ -206,12 +315,30 @@ declare namespace vim {
   function deepcopy<T>(t: T): T
   function keycode(s: string): string
   function wait(ms: number, cond?: () => boolean, interval?: number): boolean
-  function system(cmd: string[], opts?: LuaDict, on_exit?: (out: SystemCompleted) => void): SystemObj
-  interface SystemCompleted { code: number; signal: number; stdout?: string; stderr?: string }
-  interface SystemObj { wait(timeout?: number): SystemCompleted; kill(sig: number): void }
+  function system(
+    cmd: string[],
+    opts?: LuaDict,
+    on_exit?: (out: SystemCompleted) => void,
+  ): SystemObj
+  interface SystemCompleted {
+    code: number
+    signal: number
+    stdout?: string
+    stderr?: string
+  }
+  interface SystemObj {
+    wait(timeout?: number): SystemCompleted
+    kill(sig: number): void
+  }
   function paste(lines: string[], phase: number): boolean
   function on_key(fn: ((key: string, typed: string) => void) | undefined, ns?: number): number
-  function region(buf: number, pos1: unknown, pos2: unknown, regtype: string, inclusive: boolean): LuaDict
+  function region(
+    buf: number,
+    pos1: unknown,
+    pos2: unknown,
+    regtype: string,
+    inclusive: boolean,
+  ): LuaDict
 
   /** @noSelf */
   namespace log {
@@ -220,7 +347,12 @@ declare namespace vim {
 
   /** @noSelf */
   namespace keymap {
-    function set(mode: string | string[], lhs: string, rhs: string | ((this: void) => unknown), opts?: LuaDict): void
+    function set(
+      mode: string | string[],
+      lhs: string,
+      rhs: string | ((this: void) => unknown),
+      opts?: LuaDict,
+    ): void
     function del(mode: string | string[], lhs: string, opts?: LuaDict): void
   }
 
@@ -237,8 +369,15 @@ declare namespace vim {
 
   /** @noSelf */
   namespace ui {
-    function select<T>(items: T[], opts: { prompt?: string; format_item?: (item: T) => string; kind?: string }, on_choice: (item: T | undefined, idx: number | undefined) => void): void
-    function input(opts: { prompt?: string; default?: string; completion?: string }, on_confirm: (input: string | undefined) => void): void
+    function select<T>(
+      items: T[],
+      opts: { prompt?: string; format_item?: (item: T) => string; kind?: string },
+      on_choice: (item: T | undefined, idx: number | undefined) => void,
+    ): void
+    function input(
+      opts: { prompt?: string; default?: string; completion?: string },
+      on_confirm: (input: string | undefined) => void,
+    ): void
     function open(path: string): void
   }
 
@@ -248,6 +387,8 @@ declare namespace vim {
     function now(): number
     function new_timer(): UvTimer
     function fs_stat(path: string): LuaDict | undefined
+    function fs_lstat(path: string): LuaDict | undefined
+    function fs_rename(from: string, to: string): boolean | undefined
     function cwd(): string
     function os_homedir(): string
   }
@@ -260,8 +401,33 @@ declare namespace vim {
 
   /** @noSelf */
   namespace lsp {
+    /** @noSelf */
+    namespace completion {
+      function enable(
+        enabled: boolean,
+        client: number,
+        buffer: number,
+        options?: { autotrigger?: boolean },
+      ): void
+    }
+    function is_enabled(name: string): boolean
     function enable(name: string | string[], enable?: boolean): void
     function config(name: string, cfg: LuaDict): void
+    function buf_request_all(
+      buffer: number,
+      method: string,
+      params: LuaDict,
+      handler: (responses: LuaDict<{ err?: unknown; result?: unknown }>) => void,
+    ): () => void
+    /** @noSelf */
+    namespace util {
+      function make_text_document_params(buffer?: number): LuaDict
+      function symbols_to_items(
+        symbols: unknown[],
+        buffer: number,
+        encoding: string,
+      ): Array<{ filename: string; lnum: number; col: number; text: string }>
+    }
     function get_client_by_id(id: number): LspClient | undefined
     function get_clients(filter?: { bufnr?: number; name?: string; id?: number }): LspClient[]
     /** @noSelf */
@@ -285,17 +451,22 @@ declare namespace vim {
       function is_enabled(filter?: { bufnr?: number }): boolean
     }
     /** @noSelf */
-    namespace codelens { function refresh(): void }
+    namespace codelens {
+      function refresh(): void
+    }
   }
   interface LspClient {
     id: number
     name: string
+    offset_encoding: string
     server_capabilities: LuaDict
-    supports_method(method: string, opts?: { bufnr?: number }): boolean
+    supports_method(method: string, buffer?: number): boolean
   }
 
   /** @noSelf */
   namespace diagnostic {
+    function set(namespace: number, buffer: number, diagnostics: LuaDict[], options?: LuaDict): void
+    function reset(namespace: number, buffer?: number): void
     function config(opts: LuaDict): void
     function open_float(opts?: LuaDict): void
     function setloclist(opts?: LuaDict): void
@@ -310,18 +481,33 @@ declare namespace vim {
 
   /** @noSelf */
   namespace pack {
-    interface Spec { src: string; name?: string; version?: string; data?: unknown }
-    function add(specs: Array<string | Spec>, opts?: { confirm?: boolean; load?: boolean | ((data: { spec: Spec; path: string }) => void) }): void
+    interface Spec {
+      src: string
+      name?: string
+      version?: string
+      data?: unknown
+    }
+    function add(
+      specs: Array<string | Spec>,
+      opts?: { confirm?: boolean; load?: boolean | ((data: { spec: Spec; path: string }) => void) },
+    ): void
     function update(names?: string[], opts?: { force?: boolean }): void
     function del(names: string[], opts?: { force?: boolean }): void
-    function get(names?: string[], opts?: { info?: boolean }): Array<{ active: boolean; path: string; rev: string; spec: Spec }>
+    function get(
+      names?: string[],
+      opts?: { info?: boolean },
+    ): Array<{ active: boolean; path: string; rev: string; spec: Spec }>
   }
 
   /** @noSelf */
   namespace treesitter {
+    interface LanguageTree {
+      language_for_range(range: number[]): LanguageTree
+      lang(): string
+    }
     function start(buf?: number, lang?: string): void
     function stop(buf?: number): void
-    function get_parser(buf?: number, lang?: string): unknown
+    function get_parser(buf?: number, lang?: string): LanguageTree
   }
 
   /** @noSelf */
@@ -343,3 +529,9 @@ declare namespace vim {
 
 /** Lua's `unpack` (LuaJIT / 5.1) */
 declare function unpack<T extends unknown[]>(t: T): LuaMultiReturn<T>
+
+/** @noSelf */
+declare namespace vim.snippet {
+  function active(filter?: { direction?: number }): boolean
+  function jump(direction: number): void
+}

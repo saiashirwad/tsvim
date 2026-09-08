@@ -1,18 +1,41 @@
-// LSP: declare servers, react to attachments with buffer-local keymaps.
-//
-//   lsp.setup({
-//     servers: { lua_ls: {}, ts_ls: {}, rust_analyzer: { settings: {...} } },
-//     onAttach: ({ client, buffer, map }) => map.n("gd", vim.lsp.buf.definition, "Go to definition"),
-//   })
+import { behavior, mount, type Behavior, type Node } from "./spec"
+import { events, on } from "./events"
+import { within, type Scope } from "./scope"
+import { lease } from "./lease"
+import * as Task from "./task"
+import { target } from "./buffer"
 
-import { augroup } from "./events"
-import { keymap, type KeymapApi } from "./keys"
-
-/** Well-known server names from nvim-lspconfig style configs; any string is accepted. */
 export type KnownServer =
-  | "lua_ls" | "ts_ls" | "vtsls" | "denols" | "eslint" | "biome" | "rust_analyzer" | "gopls" | "pyright" | "basedpyright"
-  | "ruff" | "clangd" | "zls" | "hls" | "ocamllsp" | "elixirls" | "jsonls" | "yamlls" | "html" | "cssls" | "tailwindcss"
-  | "bashls" | "marksman" | "taplo" | "nil_ls" | "nixd" | "svelte" | "astro" | "jdtls" | "kotlin_language_server" | "sourcekit"
+  | "lua_ls"
+  | "ts_ls"
+  | "vtsls"
+  | "denols"
+  | "eslint"
+  | "biome"
+  | "rust_analyzer"
+  | "gopls"
+  | "pyright"
+  | "basedpyright"
+  | "ruff"
+  | "clangd"
+  | "zls"
+  | "hls"
+  | "ocamllsp"
+  | "elixirls"
+  | "jsonls"
+  | "yamlls"
+  | "html"
+  | "cssls"
+  | "tailwindcss"
+  | "bashls"
+  | "marksman"
+  | "taplo"
+  | "nil_ls"
+  | "nixd"
+  | "svelte"
+  | "astro"
+  | "jdtls"
+  | "sourcekit"
 export type ServerName = KnownServer | (string & {})
 
 export interface ServerConfig {
@@ -22,87 +45,165 @@ export interface ServerConfig {
   settings?: LuaDict
   init_options?: LuaDict
   capabilities?: LuaDict
-  single_file_support?: boolean
-  /** any extra `vim.lsp.Config` fields */
   [extra: string]: unknown
 }
 
 /** @noSelf */
-export interface AttachContext {
-  readonly client: vim.LspClient
+export interface Attached {
   readonly buffer: number
-  /** keymaps local to the attached buffer */
-  readonly map: KeymapApi
-  /** does the server support a method (e.g. "textDocument/formatting")? */
-  supports(method: string): boolean
+  readonly clients: readonly vim.LspClient[]
+  readonly supports: (method: string) => boolean
 }
-
-export interface LspSetup {
-  servers: Partial<Record<ServerName, ServerConfig>>
-  onAttach?: (ctx: AttachContext) => void
-  onDetach?: (ctx: AttachContext) => void
-  /** shared config merged into every server (`vim.lsp.config("*", …)`) */
-  defaults?: ServerConfig
-  /** diagnostics display (`vim.diagnostic.config`) */
-  diagnostics?: LuaDict
-  /** format on save for servers that support it (default false) */
-  formatOnSave?: boolean | { timeout?: number; filter?: (client: vim.LspClient) => boolean }
-}
-
-const clean = (cfg: ServerConfig): LuaDict => {
-  const out: LuaDict = {}
-  for (const k in cfg) if (cfg[k] !== undefined) out[k] = cfg[k]
-  return out
-}
-
-export const lsp = {
-  setup(config: LspSetup): void {
-    if (config.defaults) vim.lsp.config("*", clean(config.defaults))
-    if (config.diagnostics) vim.diagnostic.config(config.diagnostics)
-    const names: string[] = []
-    for (const name in config.servers) {
-      const cfg = config.servers[name as ServerName]
-      if (cfg) vim.lsp.config(name, clean(cfg))
-      names.push(name)
+/** One behavior per buffer, independent of how many clients attach. */
+const attached = (build: (attached: Attached) => Behavior): Node =>
+  behavior((scope) => {
+    const live = new Map<number, Scope>()
+    const refresh = (buffer: number, omit?: number) => {
+      live.get(buffer)?.close()
+      live.delete(buffer)
+      if (!vim.api.nvim_buf_is_valid(buffer)) return
+      const clients = vim.lsp.get_clients({ bufnr: buffer }).filter((client) => client.id !== omit)
+      if (clients.length === 0) return
+      const local = scope.child("language", { buffer })
+      live.set(buffer, local)
+      within(local, () =>
+        mount(
+          build({
+            buffer,
+            clients,
+            supports: (method) => clients.some((client) => client.supports_method(method, buffer)),
+          }),
+          local,
+        ),
+      )
     }
-    if (names.length > 0) vim.lsp.enable(names)
-
-    augroup("pureluanvim.lsp", (on) => {
-      on("LspAttach", (ev) => {
-        const client = vim.lsp.get_client_by_id(ev.data.client_id)
-        if (!client) return
-        const ctx: AttachContext = {
-          client,
-          buffer: ev.buf,
-          map: keymap.buffer(ev.buf),
-          supports: (method) => client.supports_method(method, { bufnr: ev.buf }),
+    scope.own(events("LspAttach").subscribe((ev) => refresh(ev.buf)))
+    scope.own(events("LspDetach").subscribe((ev) => refresh(ev.buf, ev.data.client_id)))
+    scope.own(
+      events("BufWipeout").subscribe((ev) => {
+        live.get(ev.buf)?.close()
+        live.delete(ev.buf)
+      }),
+    )
+    for (const buffer of vim.api.nvim_list_bufs()) refresh(buffer)
+  })
+const servers = (configs: Partial<Record<ServerName, ServerConfig>>): Node =>
+  behavior((scope) => {
+    for (const name in configs) {
+      const config = configs[name as ServerName]
+      if (!config) continue
+      const enabled = vim.lsp.is_enabled(name)
+      // Resolved server configurations belong to Neovim's registry; enabling is scoped.
+      vim.lsp.config(name, { ...config })
+      scope.own(
+        lease(
+          `lsp:${name}`,
+          () => vim.lsp.enable(name, enabled),
+          () => vim.lsp.enable(name),
+        ),
+      )
+    }
+  })
+const call = (fn: () => void): Task.Task<void> =>
+  Task.sync((scope) => vim.api.nvim_buf_call(target(scope), fn))
+export interface SymbolLocation {
+  readonly name: string
+  readonly path: string
+  readonly position: { readonly line: number; readonly col: number }
+}
+const symbols: Task.Task<readonly SymbolLocation[]> = Task.make((scope, done) => {
+  const buffer = target(scope)
+  if (
+    !vim.lsp
+      .get_clients({ bufnr: buffer })
+      .some((client) => client.supports_method("textDocument/documentSymbol", buffer))
+  )
+    return done({ tag: "success", value: [] })
+  const cancel = vim.lsp.buf_request_all(
+    buffer,
+    "textDocument/documentSymbol",
+    { textDocument: vim.lsp.util.make_text_document_params(buffer) },
+    (responses) => {
+      if (!scope.alive()) return
+      const items: SymbolLocation[] = []
+      const seen = new Set<string>()
+      for (const id in responses) {
+        const response = responses[id]!
+        if (response.err) return done({ tag: "failure", error: response.err })
+        const client = vim.lsp.get_client_by_id(tonumber(id)!)
+        if (!client || !response.result) continue
+        for (const item of vim.lsp.util.symbols_to_items(
+          response.result as unknown[],
+          buffer,
+          client.offset_encoding,
+        )) {
+          const key = `${item.filename}:${item.lnum}:${item.col}:${item.text}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          items.push({
+            name: item.text,
+            path: item.filename,
+            position: { line: item.lnum - 1, col: item.col - 1 },
+          })
         }
-        config.onAttach?.(ctx)
-        if (config.formatOnSave && ctx.supports("textDocument/formatting")) {
-          const fos = config.formatOnSave === true ? {} : config.formatOnSave
-          if (!fos.filter || fos.filter(client)) {
-            on("BufWritePre", { buffer: ev.buf }, () => {
-              vim.lsp.buf.format({ bufnr: ev.buf, id: client.id, timeout_ms: fos.timeout ?? 2000 })
-            })
-          }
-        }
-      })
-      if (config.onDetach) {
-        on("LspDetach", (ev) => {
-          const client = vim.lsp.get_client_by_id(ev.data.client_id)
-          if (!client) return
-          config.onDetach!({ client, buffer: ev.buf, map: keymap.buffer(ev.buf), supports: (m) => client.supports_method(m) })
-        })
       }
-    })
-  },
-
-  /** Attached clients for a buffer (default: current). */
-  clients: (buffer = 0): vim.LspClient[] => vim.lsp.get_clients({ bufnr: buffer }),
-
-  /** Toggle inlay hints for a buffer. */
-  toggleInlayHints: (buffer = 0): void => {
-    const enabled = vim.lsp.inlay_hint.is_enabled({ bufnr: buffer })
-    vim.lsp.inlay_hint.enable(!enabled, { bufnr: buffer })
-  },
+      done({ tag: "success", value: items })
+    },
+  )
+  scope.own(cancel)
+})
+export const language = {
+  servers,
+  attached,
+  symbols,
+  definition: call(vim.lsp.buf.definition),
+  declaration: call(vim.lsp.buf.declaration),
+  references: call(vim.lsp.buf.references),
+  implementation: call(vim.lsp.buf.implementation),
+  hover: call(vim.lsp.buf.hover),
+  rename: call(vim.lsp.buf.rename),
+  codeAction: call(vim.lsp.buf.code_action),
+  signature: call(vim.lsp.buf.signature_help),
+  format: (options: { readonly timeout?: number } = {}): Task.Task<void> =>
+    Task.sync((scope) =>
+      vim.lsp.buf.format({ bufnr: target(scope), timeout_ms: options.timeout ?? 2000 }),
+    ),
+  formatOnSave: (options: { readonly timeout?: number } = {}): Node =>
+    attached(({ buffer, clients }) => {
+      const client = clients.find((client) =>
+        client.supports_method("textDocument/formatting", buffer),
+      )
+      return (
+        client !== undefined &&
+        on(
+          "BufWritePre",
+          Task.sync(() =>
+            vim.lsp.buf.format({
+              bufnr: buffer,
+              id: client.id,
+              timeout_ms: options.timeout ?? 2000,
+            }),
+          ),
+        )
+      )
+    }),
+  inlayHints: (enabled = true): Node =>
+    behavior((scope) => {
+      const buffer = target(scope)
+      const previous = vim.lsp.inlay_hint.is_enabled({ bufnr: buffer })
+      scope.own(
+        lease(
+          `inlay:${buffer}`,
+          () => {
+            if (vim.api.nvim_buf_is_valid(buffer))
+              vim.lsp.inlay_hint.enable(previous, { bufnr: buffer })
+          },
+          () => vim.lsp.inlay_hint.enable(enabled, { bufnr: buffer }),
+        ),
+      )
+    }),
+  toggleInlayHints: Task.sync((scope) => {
+    const buffer = target(scope)
+    vim.lsp.inlay_hint.enable(!vim.lsp.inlay_hint.is_enabled({ bufnr: buffer }), { bufnr: buffer })
+  }),
 }

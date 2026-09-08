@@ -1,79 +1,82 @@
-// A tiny async git status panel: shows `git status --short`, lets you stage,
-// unstage and open files. Demonstrates async/await over `vim.system`.
-
-import { Buffer, float, hl, notify, sh, type Float } from "../nvim"
-
-interface Entry {
-  readonly status: string
-  readonly path: string
-}
-
-let panel: Float | undefined
-const ns = hl.namespace("pureluanvim.git")
-
-const parse = (lines: string[]): Entry[] =>
-  lines.filter((l) => l.length > 3).map((l) => ({ status: l.substring(0, 2), path: l.substring(3) }))
-
-const render = (buf: Buffer, entries: Entry[]): void => {
-  buf.opt.modifiable = true
-  buf.lines = entries.length === 0 ? ["  working tree clean"] : entries.map((e) => `${e.status}  ${e.path}`)
-  buf.opt.modifiable = false
-  buf.clearNamespace(ns)
-  entries.forEach((e, i) => {
-    const group = e.status[0] !== " " && e.status[0] !== "?" ? "DiagnosticInfo" : e.status.includes("?") ? "DiagnosticHint" : "DiagnosticWarn"
-    buf.highlight(ns, group, i, 0, 2)
+import {
+  action,
+  component,
+  editor,
+  events,
+  floating,
+  keys,
+  line,
+  list,
+  pipe,
+  resource,
+  serial,
+  State,
+  Task,
+  text,
+  type TaskValue,
+} from "../nvim"
+import { repository, type Repository, type Entry } from "./git-repository"
+const colorOf = (entry: Entry): string =>
+  entry.status.includes("?")
+    ? "DiagnosticHint"
+    : entry.status[0] !== " "
+      ? "DiagnosticInfo"
+      : "DiagnosticWarn"
+const displayPath = (path: string): string =>
+  path.split("\n").join("\\n").split("\r").join("\\r").split("\t").join("\\t")
+export const gitPanel = (repo: Repository = repository()) =>
+  component("git-status", () => {
+    const status = resource(repo.status, {
+      initial: [],
+      refresh: events(["FocusGained", "DirChanged"]),
+      concurrency: "latest",
+    })
+    const files = list(status.value, {
+      name: "git-status",
+      filetype: "gitstatus",
+      key: (entry) => `${entry.root}/${entry.path}`,
+      empty: line(text("Working tree clean", "Comment")),
+      row: (entry) =>
+        line(text(entry.status, colorOf(entry)), text(`  ${displayPath(entry.path)}`)),
+    })
+    const panel = floating(files, {
+      title: "Git status",
+      size: { width: 0.5, height: 0.4 },
+      footer: "s stage · u unstage · Enter open · r refresh",
+      caption: State.derive(() => {
+        const state = status.state.get()
+        return state.tag === "failed"
+          ? "Git failed — press r to retry"
+          : state.tag === "loading" || state.tag === "refreshing"
+            ? "Loading…"
+            : ""
+      }),
+    })
+    const index = serial()
+    const change = (label: string, write: (entry: Entry) => TaskValue<unknown>) =>
+      action(
+        label,
+        files.withSelection((entry) => pipe(index(write(entry)), Task.andThen(status.refresh))),
+      )
+    const open = files.withSelection((entry) =>
+      pipe(
+        panel.close,
+        Task.andThen(panel.inOrigin(editor.openFile(vim.fs.joinpath(entry.root, entry.path)))),
+      ),
+    )
+    const refresh = action("Refresh", status.refresh)
+    return [
+      panel,
+      files.bind(
+        keys.normal({
+          r: refresh,
+          s: change("Stage file", repo.stage),
+          u: change("Unstage file", repo.unstage),
+          "<CR>": action("Open file", open),
+          q: action("Close", panel.close),
+          "<Esc>": action("Close", panel.close),
+        }),
+      ),
+      keys.leader({ gg: action("Git status", panel.toggle) }),
+    ]
   })
-}
-
-const refresh = async (buf: Buffer): Promise<Entry[]> => {
-  const result = await sh(["git", "status", "--short"])
-  if (!result.ok) {
-    render(buf, [])
-    notify(result.stderr.trim() || "git status failed", "warn")
-    return []
-  }
-  const entries = parse(result.lines)
-  if (buf.valid) render(buf, entries)
-  return entries
-}
-
-const open = async (): Promise<void> => {
-  const buf = Buffer.scratch({ filetype: "gitstatus", name: "git status" })
-  let entries: Entry[] = []
-  const win = float({ buffer: buf, title: " git status ", width: 0.5, height: 0.4, position: "center", footer: " s stage · u unstage · <CR> open · r refresh " })
-  panel = win
-
-  const current = (): Entry | undefined => entries[win.cursor.row - 1]
-  const reload = async () => { entries = await refresh(buf) }
-
-  buf.map.n.many({
-    r: [() => void reload(), "Refresh"],
-    s: [async () => {
-      const e = current()
-      if (!e) return
-      await sh(["git", "add", "--", e.path])
-      await reload()
-    }, "Stage file"],
-    u: [async () => {
-      const e = current()
-      if (!e) return
-      await sh(["git", "restore", "--staged", "--", e.path])
-      await reload()
-    }, "Unstage file"],
-    "<CR>": [() => {
-      const e = current()
-      if (!e) return
-      win.close()
-      vim.cmd({ cmd: "edit", args: [e.path] })
-    }, "Open file"],
-  })
-
-  await reload()
-}
-
-export const gitPanel = {
-  open,
-  toggle: (): void => {
-    if (panel?.valid) { panel.close(); panel = undefined } else void open()
-  },
-}

@@ -1,8 +1,8 @@
 {
-  "name": "tsvim",
+  "name": "pureluanvim",
   "version": "1.0.0",
   "private": true,
-  "description": "",
+  "description": "Composable, scoped Neovim configurations and plugins in TypeScript",
   "keywords": [],
   "license": "ISC",
   "author": "",
@@ -11,10 +11,14 @@
     "build": "tstl",
     "watch": "tstl --watch",
     "typecheck": "tsc --noEmit",
-    "nvim": "./nvim.sh"
+    "nvim": "./nvim.sh",
+    "test": "./test/run.sh",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check ."
   },
   "devDependencies": {
     "lua-types": "^2.14.1",
+    "oxfmt": "^0.67.0",
     "typescript": "^6.0.2",
     "typescript-to-lua": "^1.37.1"
   }

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "tstl": { "luaBundle": "tests.lua", "luaBundleEntry": "test/suite.ts" },
+  "include": ["src/**/*.ts", "test/**/*.ts", "types/**/*.d.ts"]
+}
