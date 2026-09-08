@@ -1,0 +1,21 @@
+{
+  "name": "tsvim",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "scripts": {
+    "build": "tstl",
+    "watch": "tstl --watch",
+    "typecheck": "tsc --noEmit",
+    "nvim": "./nvim.sh"
+  },
+  "devDependencies": {
+    "lua-types": "^2.14.1",
+    "typescript": "^6.0.2",
+    "typescript-to-lua": "^1.37.1"
+  }
+}
